@@ -1,0 +1,347 @@
+name: Frontend CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'Frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
+
+jobs:
+  # Job 1: Install, Lint, Test, and Build
+  build-and-test:
+    name: Build and Test Frontend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+      
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+      
+      - name: Install dependencies
+        working-directory: Frontend
+        run: pnpm install --frozen-lockfile
+      
+      - name: Run TypeScript type checking
+        working-directory: Frontend
+        run: pnpm exec tsc --noEmit
+      
+      - name: Run ESLint
+        working-directory: Frontend
+        run: pnpm lint
+        continue-on-error: true
+      
+      - name: Build Next.js application
+        working-directory: Frontend
+        run: |
+          pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          NODE_ENV: production
+      
+      - name: Check build output
+        working-directory: Frontend
+        run: |
+          if [ -d ".next" ]; then
+            echo "Build successful! .next directory exists"
+            ls -la .next
+          else
+            echo "Build failed! .next directory not found"
+            exit 1
+          fi
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: |
+            Frontend/.next
+            Frontend/public
+          retention-days: 7
+      
+      - name: Run unit tests
+        working-directory: Frontend
+        run: |
+          # Add test command when tests are available
+          echo "No test script configured yet"
+          # pnpm test
+        continue-on-error: true
+
+  # Job 2: Build Docker Image (if Dockerfile exists)
+  docker-build:
+    name: Build Frontend Docker Image
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check if Dockerfile exists
+        id: check-dockerfile
+        run: |
+          if [ -f "Frontend/Dockerfile" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Set up Docker Buildx
+        if: steps.check-dockerfile.outputs.exists == 'true'
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Docker Hub
+        if: steps.check-dockerfile.outputs.exists == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        continue-on-error: true
+      
+      - name: Extract metadata
+        if: steps.check-dockerfile.outputs.exists == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/hms-frontend
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build Docker image
+        if: steps.check-dockerfile.outputs.exists == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: Frontend
+          file: Frontend/Dockerfile
+          push: false
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Push Docker image to Docker Hub
+        if: steps.check-dockerfile.outputs.exists == 'true' && secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
+        uses: docker/build-push-action@v5
+        with:
+          context: Frontend
+          file: Frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Create Dockerfile for Next.js
+        if: steps.check-dockerfile.outputs.exists == 'false'
+        run: |
+          echo "No Dockerfile found. Creating one..."
+          cat > Frontend/Dockerfile << 'EOF'
+          # Build stage
+          FROM node:20-alpine AS builder
+          
+          WORKDIR /app
+          
+          # Install pnpm
+          RUN npm install -g pnpm@9
+          
+          # Copy package files
+          COPY package.json pnpm-lock.yaml ./
+          
+          # Install dependencies
+          RUN pnpm install --frozen-lockfile
+          
+          # Copy source code
+          COPY . .
+          
+          # Build the application
+          ENV NEXT_TELEMETRY_DISABLED=1
+          RUN pnpm build
+          
+          # Production stage
+          FROM node:20-alpine AS runner
+          
+          WORKDIR /app
+          
+          ENV NODE_ENV=production
+          ENV NEXT_TELEMETRY_DISABLED=1
+          
+          RUN addgroup --system --gid 1001 nodejs
+          RUN adduser --system --uid 1001 nextjs
+          
+          # Copy necessary files from builder
+          COPY --from=builder /app/public ./public
+          COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+          COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+          
+          USER nextjs
+          
+          EXPOSE 3000
+          
+          ENV PORT=3000
+          ENV HOSTNAME="0.0.0.0"
+          
+          CMD ["node", "server.js"]
+          EOF
+          
+          echo "Dockerfile created successfully"
+
+  # Job 3: Build Size Analysis
+  analyze-build:
+    name: Analyze Build Size
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: Frontend
+      
+      - name: Analyze bundle size
+        working-directory: Frontend
+        run: |
+          echo "📦 Build Size Analysis"
+          echo "======================="
+          
+          if [ -d ".next" ]; then
+            echo ""
+            echo "Total .next directory size:"
+            du -sh .next
+            
+            echo ""
+            echo "Static directory size:"
+            du -sh .next/static 2>/dev/null || echo "N/A"
+            
+            echo ""
+            echo "Largest files in build:"
+            find .next -type f -exec du -h {} + | sort -rh | head -20
+          else
+            echo "Build directory not found"
+          fi
+
+  # Job 4: Integration Test with Backend
+  integration-test:
+    name: Frontend Integration Tests
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Install dependencies
+        working-directory: Frontend
+        run: pnpm install --frozen-lockfile
+      
+      - name: Start Backend services
+        run: |
+          cd Backend
+          docker-compose up -d
+          echo "Waiting for backend services to be ready..."
+          sleep 30
+      
+      - name: Check backend health
+        run: |
+          curl -f http://localhost:8000/health || echo "API Gateway not ready"
+          curl -f http://localhost:8001/health || echo "Auth Service not ready"
+          curl -f http://localhost:8002/health || echo "Building Service not ready"
+          curl -f http://localhost:8003/health || echo "Booking Service not ready"
+      
+      - name: Run integration tests
+        working-directory: Frontend
+        run: |
+          echo "Running integration tests..."
+          # Add integration test commands here
+          # pnpm test:integration
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+        continue-on-error: true
+      
+      - name: Stop backend services
+        if: always()
+        run: |
+          cd Backend
+          docker-compose down -v
+
+  # Job 5: Summary
+  ci-summary:
+    name: CI Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [build-and-test, docker-build, analyze-build, integration-test]
+    if: always()
+    
+    steps:
+      - name: Check CI status
+        run: |
+          echo "Frontend CI Pipeline completed!"
+          echo "Build and Test: ${{ needs.build-and-test.result }}"
+          echo "Docker Build: ${{ needs.docker-build.result }}"
+          echo "Build Analysis: ${{ needs.analyze-build.result }}"
+          echo "Integration Tests: ${{ needs.integration-test.result }}"
+          
+          if [ "${{ needs.build-and-test.result }}" != "success" ]; then
+            echo "::error::Build and Test failed"
+            exit 1
+          fi

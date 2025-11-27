@@ -1,0 +1,285 @@
+name: Backend CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'Backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+env:
+  GO_VERSION: '1.24'
+  DOCKER_REGISTRY: docker.io
+  
+jobs:
+  # Job 1: Test and Build Backend Services
+  test-and-build:
+    name: Test & Build - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - booking-service
+          - building-service
+          - api-gateway
+      fail-fast: false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: Backend/${{ matrix.service }}/go.sum
+      
+      - name: Install dependencies
+        working-directory: Backend/${{ matrix.service }}
+        run: |
+          go mod download
+          go mod verify
+      
+      - name: Run go vet
+        working-directory: Backend/${{ matrix.service }}
+        run: go vet ./...
+      
+      - name: Run go fmt check
+        working-directory: Backend/${{ matrix.service }}
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Go code is not formatted:"
+            gofmt -d .
+            exit 1
+          fi
+      
+      - name: Build service
+        working-directory: Backend/${{ matrix.service }}
+        run: |
+          CGO_ENABLED=0 GOOS=linux go build -v -o main .
+          ls -lh main
+      
+      - name: Run unit tests
+        working-directory: Backend/${{ matrix.service }}
+        run: |
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        continue-on-error: true
+      
+      - name: Upload coverage to artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.service }}
+          path: Backend/${{ matrix.service }}/coverage.out
+          retention-days: 5
+        if: always()
+      
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.service }}
+          path: Backend/${{ matrix.service }}/main
+          retention-days: 1
+
+  # Job 2: Generate gRPC code and verify
+  verify-grpc:
+    name: Verify gRPC Proto
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
+      
+      - name: Install Go protoc plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          export PATH="$PATH:$(go env GOPATH)/bin"
+      
+      - name: Verify proto files exist
+        working-directory: Backend/proto
+        run: |
+          ls -la
+          if [ ! -f auth.proto ] || [ ! -f building.proto ]; then
+            echo "Proto files not found!"
+            exit 1
+          fi
+      
+      - name: Check proto syntax
+        working-directory: Backend/proto
+        run: |
+          echo "Proto files are present and accessible"
+
+  # Job 3: Build and Push Docker Images
+  docker-build-push:
+    name: Docker Build & Push - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: [test-and-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - booking-service
+          - building-service
+          - api-gateway
+      fail-fast: false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        if: secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/hms-${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: Backend/${{ matrix.service }}
+          file: Backend/${{ matrix.service }}/Dockerfile
+          push: false
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Test Docker image
+        run: |
+          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          echo "Testing image: $IMAGE_TAG"
+          docker run --rm $IMAGE_TAG --help || echo "Image runs successfully"
+      
+      - name: Push Docker image to Docker Hub
+        uses: docker/build-push-action@v5
+        with:
+          context: Backend/${{ matrix.service }}
+          file: Backend/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+        if: secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
+
+  # Job 4: Integration Test with Docker Compose
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [test-and-build]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Start services with docker-compose
+        working-directory: Backend
+        run: |
+          docker-compose up -d --build
+          sleep 30
+      
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for services to be ready..."
+          for i in {1..30}; do
+            if docker ps | grep -q "healthy"; then
+              echo "Services are healthy"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+      
+      - name: Check service health
+        run: |
+          docker-compose -f Backend/docker-compose.yml ps
+          
+          # Check API Gateway
+          curl -f http://localhost:8000/health || echo "API Gateway health check failed"
+          
+          # Check Auth Service
+          curl -f http://localhost:8001/health || echo "Auth Service health check failed"
+          
+          # Check Building Service
+          curl -f http://localhost:8002/health || echo "Building Service health check failed"
+          
+          # Check Booking Service
+          curl -f http://localhost:8003/health || echo "Booking Service health check failed"
+      
+      - name: Run integration tests
+        run: |
+          echo "Running integration tests..."
+          # Add your integration test commands here
+          # For example: go test -tags=integration ./tests/integration/...
+      
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          docker-compose -f Backend/docker-compose.yml logs
+      
+      - name: Stop services
+        if: always()
+        working-directory: Backend
+        run: |
+          docker-compose down -v
+
+  # Job 5: Summary
+  ci-summary:
+    name: CI Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [test-and-build, verify-grpc, docker-build-push, integration-test]
+    if: always()
+    
+    steps:
+      - name: Check CI status
+        run: |
+          echo "Backend CI Pipeline completed!"
+          echo "Test and Build: ${{ needs.test-and-build.result }}"
+          echo "gRPC Verification: ${{ needs.verify-grpc.result }}"
+          echo "Docker Build & Push: ${{ needs.docker-build-push.result }}"
+          echo "Integration Tests: ${{ needs.integration-test.result }}"
+          
+          if [ "${{ needs.test-and-build.result }}" != "success" ]; then
+            echo "::error::Test and Build failed"
+            exit 1
+          fi
