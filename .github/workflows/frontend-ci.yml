@@ -63,20 +63,13 @@ jobs:
         run: |
           echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
       
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-v3-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-v3-
-      
       - name: Install dependencies
         working-directory: Frontend
         run: |
           rm -rf node_modules
           rm -rf .next
-          pnpm install --no-frozen-lockfile
+          rm -rf ~/.pnpm-store
+          pnpm install --no-frozen-lockfile --force
       
       - name: Verify files before TypeScript check
         working-directory: Frontend
@@ -86,7 +79,10 @@ jobs:
       
       - name: Run TypeScript type checking
         working-directory: Frontend
-        run: pnpm exec tsc --noEmit
+        run: |
+          rm -rf node_modules/.cache
+          rm -f tsconfig.tsbuildinfo
+          pnpm exec tsc --noEmit
       
       - name: Run ESLint
         working-directory: Frontend
