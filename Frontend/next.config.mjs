@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Standalone output for Docker builds (set via ENV in Dockerfile)
+  // Disabled locally on Windows due to symlink permissions
+  output: process.env.NEXT_OUTPUT_MODE === 'standalone' ? 'standalone' : undefined,
   eslint: {
     ignoreDuringBuilds: true,
   },
