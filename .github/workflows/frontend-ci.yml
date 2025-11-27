@@ -26,6 +26,26 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          clean: true
+      
+      - name: Verify files are correct
+        run: |
+          echo "=== Checking use-admin-auth.tsx ==="
+          echo "Line 16:"
+          sed -n '16p' Frontend/hooks/use-admin-auth.tsx
+          echo "Line 47:"
+          sed -n '47p' Frontend/hooks/use-admin-auth.tsx
+          echo ""
+          echo "=== Checking use-auth.tsx ==="
+          echo "Line 16:"
+          sed -n '16p' Frontend/hooks/use-auth.tsx
+          echo "Line 34:"
+          sed -n '34p' Frontend/hooks/use-auth.tsx
+          echo "Line 38:"
+          sed -n '38p' Frontend/hooks/use-auth.tsx
+          echo "Line 75:"
+          sed -n '75p' Frontend/hooks/use-auth.tsx
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -53,7 +73,16 @@ jobs:
       
       - name: Install dependencies
         working-directory: Frontend
-        run: pnpm install --no-frozen-lockfile
+        run: |
+          rm -rf node_modules
+          rm -rf .next
+          pnpm install --no-frozen-lockfile
+      
+      - name: Verify files before TypeScript check
+        working-directory: Frontend
+        run: |
+          echo "Final verification before tsc:"
+          grep -n "token: null" hooks/use-admin-auth.tsx hooks/use-auth.tsx || echo "WARNING: token: null not found!"
       
       - name: Run TypeScript type checking
         working-directory: Frontend
