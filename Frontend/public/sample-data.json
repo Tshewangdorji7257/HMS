@@ -1,0 +1,24 @@
+{
+  "buildings": [
+    {
+      "id": "building-1",
+      "name": "Aurora Hall",
+      "description": "Modern residence with state-of-the-art facilities",
+      "totalRooms": 25,
+      "totalBeds": 75,
+      "availableBeds": 52,
+      "amenities": ["Wi-Fi", "Laundry Room", "Common Kitchen", "Study Lounge", "Recreation Room", "Gym"],
+      "image": "/placeholder.svg?height=200&width=300"
+    },
+    {
+      "id": "building-2",
+      "name": "Sunrise Residence",
+      "description": "Cozy accommodation with a homely atmosphere",
+      "totalRooms": 20,
+      "totalBeds": 60,
+      "availableBeds": 43,
+      "amenities": ["Wi-Fi", "Laundry Room", "Common Kitchen", "Study Lounge", "Recreation Room", "Cafeteria"],
+      "image": "/placeholder.svg?height=200&width=300"
+    }
+  ]
+}

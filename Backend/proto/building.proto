@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package building;
+
+option go_package = "building-service/proto/building";
+
+// Building Service Definition
+service BuildingService {
+  rpc GetBuildingByID(GetBuildingByIDRequest) returns (GetBuildingByIDResponse);
+  rpc GetRoomByID(GetRoomByIDRequest) returns (GetRoomByIDResponse);
+  rpc GetBedByID(GetBedByIDRequest) returns (GetBedByIDResponse);
+  rpc UpdateBedOccupancy(UpdateBedOccupancyRequest) returns (UpdateBedOccupancyResponse);
+  rpc GetBedsByUserID(GetBedsByUserIDRequest) returns (GetBedsByUserIDResponse);
+}
+
+// Messages
+message Bed {
+  string id = 1;
+  string room_id = 2;
+  int32 number = 3;
+  bool is_occupied = 4;
+  string occupied_by = 5;
+  string occupied_by_name = 6;
+}
+
+message Room {
+  string id = 1;
+  string building_id = 2;
+  string number = 3;
+  string type = 4;
+  int32 total_beds = 5;
+  int32 available_beds = 6;
+  repeated string amenities = 7;
+  double price = 8;
+  repeated Bed beds = 9;
+}
+
+message Building {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  int32 total_rooms = 4;
+  int32 total_beds = 5;
+  int32 available_beds = 6;
+  repeated string amenities = 7;
+  string image = 8;
+  repeated Room rooms = 9;
+}
+
+message GetBuildingByIDRequest {
+  string building_id = 1;
+}
+
+message GetBuildingByIDResponse {
+  bool success = 1;
+  Building building = 2;
+  string message = 3;
+}
+
+message GetRoomByIDRequest {
+  string building_id = 1;
+  string room_id = 2;
+}
+
+message GetRoomByIDResponse {
+  bool success = 1;
+  Room room = 2;
+  string message = 3;
+}
+
+message GetBedByIDRequest {
+  string bed_id = 1;
+}
+
+message GetBedByIDResponse {
+  bool success = 1;
+  Bed bed = 2;
+  string message = 3;
+}
+
+message UpdateBedOccupancyRequest {
+  string bed_id = 1;
+  bool is_occupied = 2;
+  string occupied_by = 3;
+  string occupied_by_name = 4;
+}
+
+message UpdateBedOccupancyResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetBedsByUserIDRequest {
+  string user_id = 1;
+}
+
+message GetBedsByUserIDResponse {
+  bool success = 1;
+  repeated Bed beds = 2;
+  string message = 3;
+}

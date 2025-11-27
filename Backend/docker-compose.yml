@@ -1,0 +1,167 @@
+services:
+  # PostgreSQL Databases
+  auth-db:
+    image: postgres:15-alpine
+    container_name: hostel_auth_db
+    environment:
+      POSTGRES_DB: hostel_auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    networks:
+      - hostel-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  building-db:
+    image: postgres:15-alpine
+    container_name: hostel_building_db
+    environment:
+      POSTGRES_DB: hostel_building_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - building_db_data:/var/lib/postgresql/data
+    networks:
+      - hostel-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  booking-db:
+    image: postgres:15-alpine
+    container_name: hostel_booking_db
+    environment:
+      POSTGRES_DB: hostel_booking_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - booking_db_data:/var/lib/postgresql/data
+    networks:
+      - hostel-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: hostel_auth_service
+    environment:
+      DB_HOST: auth-db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: hostel_auth_db
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      JWT_EXPIRY: 24h
+      PORT: 8001
+      GRPC_PORT: 9001
+    ports:
+      - "8001:8001"
+      - "9001:9001"
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    networks:
+      - hostel-network
+    restart: unless-stopped
+
+  # Building Service
+  building-service:
+    build:
+      context: ./building-service
+      dockerfile: Dockerfile
+    container_name: hostel_building_service
+    environment:
+      DB_HOST: building-db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: hostel_building_db
+      PORT: 8002
+      GRPC_PORT: 9002
+      AUTH_SERVICE_URL: http://auth-service:8001
+    ports:
+      - "8002:8002"
+      - "9002:9002"
+    depends_on:
+      building-db:
+        condition: service_healthy
+    networks:
+      - hostel-network
+    restart: unless-stopped
+
+  # Booking Service
+  booking-service:
+    build:
+      context: ./booking-service
+      dockerfile: Dockerfile
+    container_name: hostel_booking_service
+    environment:
+      DB_HOST: booking-db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: hostel_booking_db
+      PORT: 8003
+      AUTH_SERVICE_URL: http://auth-service:8001
+      BUILDING_SERVICE_URL: http://building-service:8002
+      AUTH_GRPC_URL: auth-service:9001
+      BUILDING_GRPC_URL: building-service:9002
+    ports:
+      - "8003:8003"
+    depends_on:
+      booking-db:
+        condition: service_healthy
+    networks:
+      - hostel-network
+    restart: unless-stopped
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: hostel_api_gateway
+    environment:
+      PORT: 8000
+      AUTH_SERVICE_URL: http://auth-service:8001
+      BUILDING_SERVICE_URL: http://building-service:8002
+      BOOKING_SERVICE_URL: http://booking-service:8003
+      AUTH_GRPC_URL: auth-service:9001
+      BUILDING_GRPC_URL: building-service:9002
+    ports:
+      - "8000:8000"
+    depends_on:
+      - auth-service
+      - building-service
+      - booking-service
+    networks:
+      - hostel-network
+    restart: unless-stopped
+
+networks:
+  hostel-network:
+    driver: bridge
+
+volumes:
+  auth_db_data:
+  building_db_data:
+  booking_db_data:
