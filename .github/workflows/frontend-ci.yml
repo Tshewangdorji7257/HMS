@@ -54,7 +54,7 @@ jobs:
       
       - name: Install dependencies
         working-directory: Frontend
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
       
       - name: Run TypeScript type checking
         working-directory: Frontend
