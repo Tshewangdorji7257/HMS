@@ -1,4 +1,4 @@
-name: Frontend CI Pipeline
+name: Frontend CI Pipeline v2
 
 on:
   push:
@@ -30,6 +30,17 @@ jobs:
         with:
           clean: true
           fetch-depth: 0
+          ref: ${{ github.sha }}
+      
+      - name: Verify checkout
+        run: |
+          echo "Current commit:"
+          git rev-parse HEAD
+          echo "Expected commit: ${{ github.sha }}"
+          echo "Checking use-admin-auth.tsx line 16:"
+          sed -n '16p' Frontend/hooks/use-admin-auth.tsx
+          echo "Checking use-auth.tsx line 16:"
+          sed -n '16p' Frontend/hooks/use-auth.tsx
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
