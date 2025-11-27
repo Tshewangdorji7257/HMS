@@ -60,7 +60,6 @@ jobs:
       - name: Run TypeScript type checking
         working-directory: Frontend
         run: pnpm exec tsc --noEmit
-        continue-on-error: true
       
       - name: Run ESLint
         working-directory: Frontend
