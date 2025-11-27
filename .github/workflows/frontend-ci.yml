@@ -28,24 +28,34 @@ jobs:
         uses: actions/checkout@v4
         with:
           clean: true
+          fetch-depth: 1
       
-      - name: Verify files are correct
+      - name: Show commit info
         run: |
-          echo "=== Checking use-admin-auth.tsx ==="
-          echo "Line 16:"
+          echo "Current commit: $(git rev-parse HEAD)"
+          echo "Commit message: $(git log -1 --pretty=%B)"
+          echo "Files changed in this commit:"
+          git show --name-only --pretty="" HEAD | head -20
+      
+      - name: Verify files have token fixes
+        run: |
+          echo "=== use-admin-auth.tsx line 16 ===" 
           sed -n '16p' Frontend/hooks/use-admin-auth.tsx
-          echo "Line 47:"
-          sed -n '47p' Frontend/hooks/use-admin-auth.tsx
-          echo ""
-          echo "=== Checking use-auth.tsx ==="
-          echo "Line 16:"
-          sed -n '16p' Frontend/hooks/use-auth.tsx
-          echo "Line 34:"
-          sed -n '34p' Frontend/hooks/use-auth.tsx
-          echo "Line 38:"
-          sed -n '38p' Frontend/hooks/use-auth.tsx
-          echo "Line 75:"
-          sed -n '75p' Frontend/hooks/use-auth.tsx
+          if grep -q "token: null" Frontend/hooks/use-admin-auth.tsx; then
+            echo "✅ use-admin-auth.tsx HAS token: null"
+          else
+            echo "❌ use-admin-auth.tsx MISSING token: null"
+            exit 1
+          fi
+          
+          echo "=== use-auth.tsx line 16 ==="
+          sed -n '16p' Frontend/hooks/use-auth.tsx  
+          if grep -q "token: null" Frontend/hooks/use-auth.tsx; then
+            echo "✅ use-auth.tsx HAS token: null"
+          else
+            echo "❌ use-auth.tsx MISSING token: null"
+            exit 1
+          fi
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
