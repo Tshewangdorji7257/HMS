@@ -27,6 +27,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -57,13 +60,12 @@ jobs:
         run: |
           pnpm install --no-frozen-lockfile || pnpm install
       
-      - name: Debug - Check file content
+      - name: Clear TypeScript build info
         working-directory: Frontend
         run: |
-          echo "Checking use-admin-auth.tsx line 16:"
-          sed -n '16p' hooks/use-admin-auth.tsx
-          echo "Checking use-auth.tsx line 16:"
-          sed -n '16p' hooks/use-auth.tsx
+          rm -f tsconfig.tsbuildinfo
+          rm -rf .next
+          echo "Cleaned TypeScript cache"
       
       - name: Run TypeScript type checking
         working-directory: Frontend
