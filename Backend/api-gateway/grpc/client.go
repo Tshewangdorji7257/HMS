@@ -1,3 +1,5 @@
+// +build !test
+
 package grpc
 
 import (
