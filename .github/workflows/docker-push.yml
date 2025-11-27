@@ -65,6 +65,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
       
       - name: Build and push Docker image
+        id: docker_build
         uses: docker/build-push-action@v5
         with:
           context: Backend/${{ matrix.service }}
@@ -76,15 +77,22 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
       
-      - name: Run Snyk to check for vulnerabilities
+      - name: Run Snyk security scan
         uses: snyk/actions/docker@master
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          image: ${{ steps.meta.outputs.tags }}
-          args: --severity-threshold=high
+          image: ${{ env.REGISTRY }}/${{ github.repository }}/hms-${{ matrix.service }}:${{ github.sha }}
+          args: --severity-threshold=high --file=Backend/${{ matrix.service }}/Dockerfile
         if: secrets.SNYK_TOKEN != ''
+      
+      - name: Upload Snyk results to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: secrets.SNYK_TOKEN != ''
+        continue-on-error: true
+        with:
+          sarif_file: snyk.sarif
       
       - name: Image digest
         run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
@@ -126,6 +134,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
       
       - name: Build and push Docker image
+        id: docker_build
         uses: docker/build-push-action@v5
         with:
           context: Frontend
@@ -137,15 +146,22 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
       
-      - name: Run Snyk to check for vulnerabilities
+      - name: Run Snyk security scan
         uses: snyk/actions/docker@master
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          image: ${{ steps.meta.outputs.tags }}
-          args: --severity-threshold=high
+          image: ${{ env.REGISTRY }}/${{ github.repository }}/hms-frontend:${{ github.sha }}
+          args: --severity-threshold=high --file=Frontend/Dockerfile
         if: secrets.SNYK_TOKEN != ''
+      
+      - name: Upload Snyk results to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: secrets.SNYK_TOKEN != ''
+        continue-on-error: true
+        with:
+          sarif_file: snyk.sarif
       
       - name: Image digest
         run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
