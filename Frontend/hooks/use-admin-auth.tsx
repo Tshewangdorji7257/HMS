@@ -13,7 +13,7 @@ interface AdminAuthContextType extends AdminAuthState {
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined)
 
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
-  const [authState, setAuthState] = useState<AdminAuthState>({ user: null, isAuthenticated: false })
+  const [authState, setAuthState] = useState<AdminAuthState>({ user: null, isAuthenticated: false, token: null })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     adminAuthService.logout()
-    setAuthState({ user: null, isAuthenticated: false })
+    setAuthState({ user: null, isAuthenticated: false, token: null })
   }
 
   return (

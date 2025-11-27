@@ -13,7 +13,7 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [authState, setAuthState] = useState<AuthState>({ user: null, isAuthenticated: false })
+  const [authState, setAuthState] = useState<AuthState>({ user: null, isAuthenticated: false, token: null })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -31,11 +31,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           // Token is invalid, clear auth state
           authService.logout()
-          setAuthState({ user: null, isAuthenticated: false })
+          setAuthState({ user: null, isAuthenticated: false, token: null })
         }
       } else {
         // No stored auth, ensure user sees login page
-        setAuthState({ user: null, isAuthenticated: false })
+        setAuthState({ user: null, isAuthenticated: false, token: null })
       }
       
       setLoading(false)
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     authService.logout()
-    setAuthState({ user: null, isAuthenticated: false })
+    setAuthState({ user: null, isAuthenticated: false, token: null })
   }
 
   return (
