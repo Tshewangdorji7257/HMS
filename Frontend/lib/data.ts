@@ -149,6 +149,7 @@ class HostelDataService {
           body: JSON.stringify({
             user_id: authState.user.id,
             user_name: authState.user.name,
+            user_email: authState.user.email,
             building_id: bookingData.buildingId,
             building_name: bookingData.buildingName,
             room_id: bookingData.roomId,
@@ -216,12 +217,20 @@ class HostelDataService {
   }
 
   // Get all bookings (admin only)
-  async getAllBookings(): Promise<Booking[]> {
+  async getAllBookings(adminToken?: string): Promise<Booking[]> {
     try {
-      const token = authService.getToken()
+      // Use admin token if provided, otherwise try regular token
+      let token = adminToken
+      if (!token && typeof globalThis.window !== 'undefined') {
+        token = localStorage.getItem('hostel-admin-auth-token') || authService.getToken()
+      }
+      
       if (!token) {
+        console.warn('No auth token available for getAllBookings')
         return []
       }
+
+      console.log('📋 Fetching all bookings with token:', token ? 'Token present' : 'No token')
 
       const response = await apiFetch<{ success: boolean; bookings: any[] }>(
         '/api/bookings',
@@ -231,6 +240,11 @@ class HostelDataService {
           },
         }
       )
+
+      console.log('📋 getAllBookings response:', { 
+        success: response.success, 
+        bookingsCount: response.bookings?.length 
+      })
 
       if (response.success && response.bookings) {
         return response.bookings.map(this.transformBooking)
@@ -251,8 +265,11 @@ class HostelDataService {
         return { success: false, error: 'Authentication required' }
       }
 
+      const authState = authService.getAuthState()
+      const userEmail = authState.user?.email || ''
+
       const response = await apiFetch<{ success: boolean; message: string }>(
-        `/api/bookings/${bookingId}/cancel`,
+        `/api/bookings/${bookingId}/cancel?user_email=${encodeURIComponent(userEmail)}`,
         {
           method: 'PUT',
           headers: {

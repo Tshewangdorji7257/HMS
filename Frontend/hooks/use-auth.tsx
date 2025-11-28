@@ -17,27 +17,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Initialize auth state and validate token
-    const initAuth = async () => {
+    // Initialize auth state from localStorage
+    const initAuth = () => {
       const state = authService.getAuthState()
-      
-      // If user appears to be authenticated, validate the token
-      if (state.isAuthenticated && state.token) {
-        const isValid = await authService.validateToken(state.token)
-        
-        if (isValid) {
-          // Token is valid, set auth state
-          setAuthState(state)
-        } else {
-          // Token is invalid, clear auth state
-          authService.logout()
-          setAuthState({ user: null, isAuthenticated: false, token: null })
-        }
-      } else {
-        // No stored auth, ensure user sees login page
-        setAuthState({ user: null, isAuthenticated: false, token: null })
-      }
-      
+      setAuthState(state)
       setLoading(false)
     }
 

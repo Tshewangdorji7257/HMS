@@ -84,7 +84,7 @@ export default function BuildingPage() {
     )
   }
 
-  const occupancyRate = Math.round(((building.totalBeds - building.availableBeds) / building.totalBeds) * 100)
+  const occupancyRate = Math.abs(Math.round(((building.totalBeds - building.availableBeds) / building.totalBeds) * 100))
 
   const getAmenityIcon = (amenity: string) => {
     switch (amenity.toLowerCase()) {

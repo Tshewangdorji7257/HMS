@@ -23,6 +23,7 @@ type Booking struct {
 type CreateBookingRequest struct {
 	UserID       string `json:"user_id" binding:"required"`
 	UserName     string `json:"user_name" binding:"required"`
+	UserEmail    string `json:"user_email"`
 	BuildingID   string `json:"building_id" binding:"required"`
 	BuildingName string `json:"building_name" binding:"required"`
 	RoomID       string `json:"room_id" binding:"required"`

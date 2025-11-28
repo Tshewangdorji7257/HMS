@@ -12,7 +12,7 @@ export function QuickStats() {
     const totalBuildings = data.buildings.length
     const totalBeds = data.buildings.reduce((sum, building) => sum + building.totalBeds, 0)
     const availableBeds = data.buildings.reduce((sum, building) => sum + building.availableBeds, 0)
-    const occupancyRate = totalBeds > 0 ? Math.round(((totalBeds - availableBeds) / totalBeds) * 100) : 0
+    const occupancyRate = totalBeds > 0 ? Math.abs(Math.round(((totalBeds - availableBeds) / totalBeds) * 100)) : 0
     const activeBookings = data.bookings.filter((booking) => booking.status === "active").length
     
     return { totalBuildings, totalBeds, availableBeds, occupancyRate, activeBookings }

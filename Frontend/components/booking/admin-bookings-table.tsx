@@ -2,10 +2,18 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { hostelDataService } from "@/lib/data"
 import { cn } from "@/lib/utils"
-import { ArrowDownToLine, Download, Clock, Hash, Loader2 } from "lucide-react"
+import { ArrowDownToLine, Download, Clock, Hash, Loader2, Search, Filter } from "lucide-react"
 import type { Booking } from "@/lib/types"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 function formatBookingId(raw: string) {
   // Expect pattern like booking-<timestamp>-<random>
@@ -48,11 +56,15 @@ function cleanStudent(name: string) {
 export function AdminBookingsTable() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [buildingFilter, setBuildingFilter] = useState<string>("all")
+  const [roomFilter, setRoomFilter] = useState<string>("all")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
 
   useEffect(() => {
     async function loadBookings() {
       try {
-        const data = await hostelDataService.getBookings()
+        const data = await hostelDataService.getAllBookings()
         setBookings(data)
       } catch (error) {
         console.error('Error loading bookings:', error)
@@ -63,12 +75,61 @@ export function AdminBookingsTable() {
     loadBookings()
   }, [])
 
-  const enhanced = useMemo(() => bookings.map(b => ({
+  // Get unique buildings and rooms for filters
+  const buildings = useMemo(() => {
+    const uniqueBuildings = Array.from(new Set(bookings.map(b => b.buildingName)))
+    return uniqueBuildings.sort()
+  }, [bookings])
+
+  const rooms = useMemo(() => {
+    let filteredBookings = bookings
+    if (buildingFilter !== "all") {
+      filteredBookings = filteredBookings.filter(b => b.buildingName === buildingFilter)
+    }
+    const uniqueRooms = Array.from(new Set(filteredBookings.map(b => b.roomNumber)))
+    return uniqueRooms.sort()
+  }, [bookings, buildingFilter])
+
+  // Filter and search bookings
+  const filteredBookings = useMemo(() => {
+    let filtered = bookings
+
+    // Apply building filter
+    if (buildingFilter !== "all") {
+      filtered = filtered.filter(b => b.buildingName === buildingFilter)
+    }
+
+    // Apply room filter
+    if (roomFilter !== "all") {
+      filtered = filtered.filter(b => b.roomNumber === roomFilter)
+    }
+
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(b => b.status === statusFilter)
+    }
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(b => 
+        b.userName.toLowerCase().includes(query) ||
+        b.buildingName.toLowerCase().includes(query) ||
+        b.roomNumber.toLowerCase().includes(query) ||
+        b.bedNumber.toString().includes(query) ||
+        b.id.toLowerCase().includes(query)
+      )
+    }
+
+    return filtered
+  }, [bookings, buildingFilter, roomFilter, statusFilter, searchQuery])
+
+  const enhanced = useMemo(() => filteredBookings.map(b => ({
     ...b,
     shortId: formatBookingId(b.id),
     displayDate: formatDate(b.bookingDate),
     studentDisplay: cleanStudent(b.userName)
-  })), [bookings])
+  })), [filteredBookings])
 
   const handleExport = () => {
     const csv = bookingsToCsv(bookings)
@@ -88,12 +149,91 @@ export function AdminBookingsTable() {
           <h2 className="text-xl font-serif font-light tracking-tight flex items-center gap-2">
             <Hash className="h-5 w-5 text-rose-500" /> Bookings Overview
           </h2>
-          <p className="text-xs text-muted-foreground">{enhanced.length} total • Updated <Clock className="inline h-3 w-3" /> {new Date().toLocaleTimeString()}</p>
+          <p className="text-xs text-muted-foreground">
+            {enhanced.length} {searchQuery || buildingFilter !== "all" || roomFilter !== "all" || statusFilter !== "all" ? "filtered" : "total"} • 
+            {bookings.length} total bookings • 
+            Updated <Clock className="inline h-3 w-3" /> {new Date().toLocaleTimeString()}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button onClick={handleExport} variant="outline" className="gap-2">
             <Download className="h-4 w-4" /> Export CSV
           </Button>
+        </div>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="flex flex-col gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search by student, building, room, bed, or booking ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        
+        <div className="flex flex-wrap gap-2">
+          <Select value={buildingFilter} onValueChange={(value) => {
+            setBuildingFilter(value)
+            setRoomFilter("all") // Reset room filter when building changes
+          }}>
+            <SelectTrigger className="w-[180px]">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="All Buildings" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Buildings</SelectItem>
+              {buildings.map((building) => (
+                <SelectItem key={building} value={building}>
+                  {building}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={roomFilter} onValueChange={setRoomFilter}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="All Rooms" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Rooms</SelectItem>
+              {rooms.map((room) => (
+                <SelectItem key={room} value={room}>
+                  Room {room}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {(searchQuery || buildingFilter !== "all" || roomFilter !== "all" || statusFilter !== "all") && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                setSearchQuery("")
+                setBuildingFilter("all")
+                setRoomFilter("all")
+                setStatusFilter("all")
+              }}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Clear Filters
+            </Button>
+          )}
         </div>
       </div>
 

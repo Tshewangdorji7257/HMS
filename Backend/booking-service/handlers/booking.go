@@ -115,6 +115,23 @@ func CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Send booking confirmation email (non-blocking)
+	if req.UserEmail != "" {
+		go func() {
+			emailData := utils.BookingConfirmationData{
+				StudentName:  booking.UserName,
+				BuildingName: booking.BuildingName,
+				RoomNumber:   booking.RoomNumber,
+				BedNumber:    booking.BedNumber,
+				BookingDate:  booking.BookingDate.Format("January 2, 2006"),
+				BookingID:    booking.ID,
+			}
+			if err := utils.SendBookingConfirmationEmail(req.UserEmail, emailData); err != nil {
+				log.Printf("⚠️  Failed to send booking confirmation email to %s: %v", req.UserEmail, err)
+			}
+		}()
+	}
+
 	respondJSON(w, http.StatusCreated, models.BookingResponse{
 		Success: true,
 		Message: "Booking created successfully",
@@ -304,6 +321,26 @@ func CancelBooking(w http.ResponseWriter, r *http.Request) {
 
 	booking.Status = "cancelled"
 	booking.UpdatedAt = time.Now()
+
+	// Get user email from request query parameter
+	userEmail := r.URL.Query().Get("user_email")
+	
+	// Send cancellation confirmation email (non-blocking)
+	if userEmail != "" {
+		go func() {
+			emailData := utils.BookingCancellationData{
+				StudentName:  booking.UserName,
+				BuildingName: booking.BuildingName,
+				RoomNumber:   booking.RoomNumber,
+				BedNumber:    booking.BedNumber,
+				CancelDate:   time.Now().Format("January 2, 2006"),
+				BookingID:    booking.ID,
+			}
+			if err := utils.SendBookingCancellationEmail(userEmail, emailData); err != nil {
+				log.Printf("⚠️  Failed to send cancellation confirmation email to %s: %v", userEmail, err)
+			}
+		}()
+	}
 
 	respondJSON(w, http.StatusOK, models.BookingResponse{
 		Success: true,

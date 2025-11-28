@@ -17,7 +17,7 @@ export const BuildingCard = memo(function BuildingCard(props: Readonly<BuildingC
   const { building, onViewDetails } = props
 
   const occupancyRate = useMemo(() => 
-    Math.round(((building.totalBeds - building.availableBeds) / building.totalBeds) * 100),
+    Math.abs(Math.round(((building.totalBeds - building.availableBeds) / building.totalBeds) * 100)),
     [building.totalBeds, building.availableBeds]
   )
 
