@@ -1,0 +1,355 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>auth-service: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">auth-service/main.go (0.0%)</option>
+				
+				<option value="file1">auth-service/middleware/auth.go (100.0%)</option>
+				
+				<option value="file2">auth-service/utils/jwt.go (83.3%)</option>
+				
+				<option value="file3">auth-service/utils/password.go (100.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">no coverage</span>
+				<span class="cov1">low coverage</span>
+				<span class="cov2">*</span>
+				<span class="cov3">*</span>
+				<span class="cov4">*</span>
+				<span class="cov5">*</span>
+				<span class="cov6">*</span>
+				<span class="cov7">*</span>
+				<span class="cov8">*</span>
+				<span class="cov9">*</span>
+				<span class="cov10">high coverage</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "auth-service/consul"
+        "auth-service/database"
+        "auth-service/handlers"
+        "auth-service/middleware"
+        "log"
+        "net/http"
+        "os"
+        "os/signal"
+        "syscall"
+
+        "github.com/gorilla/mux"
+        "github.com/joho/godotenv"
+)
+
+func main() <span class="cov0" title="0">{
+        // Load environment variables
+        if err := godotenv.Load(); err != nil </span><span class="cov0" title="0">{
+                log.Println("No .env file found, using system environment variables")
+        }</span>
+
+        // Initialize database
+        <span class="cov0" title="0">if err := database.InitDB(); err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Failed to initialize database: %v", err)
+        }</span>
+        <span class="cov0" title="0">defer database.CloseDB()
+
+        // Initialize Consul
+        if err := consul.InitConsul(); err != nil </span><span class="cov0" title="0">{
+                log.Printf("⚠️  Failed to initialize Consul: %v", err)
+        }</span> else<span class="cov0" title="0"> {
+                // Register service with Consul
+                if err := consul.RegisterService(); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("⚠️  Failed to register service with Consul: %v", err)
+                }</span>
+                // Deregister on shutdown
+                <span class="cov0" title="0">defer consul.DeregisterService()</span>
+        }
+
+        // Create router
+        <span class="cov0" title="0">router := mux.NewRouter()
+
+        // API routes
+        api := router.PathPrefix("/api/auth").Subrouter()
+
+        // Public routes
+        api.HandleFunc("/signup", handlers.Signup).Methods("POST", "OPTIONS")
+        api.HandleFunc("/login", handlers.Login).Methods("POST", "OPTIONS")
+        api.HandleFunc("/validate", handlers.ValidateTokenHandler).Methods("POST", "OPTIONS")
+
+        // Protected routes
+        api.HandleFunc("/profile", middleware.AuthMiddleware(handlers.GetUserProfile)).Methods("GET", "OPTIONS")
+
+        // Health check
+        router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusOK)
+                w.Write([]byte(`{"status":"healthy","service":"auth-service"}`))
+        }</span>).Methods("GET")
+
+        // No CORS configuration - API Gateway handles all CORS
+        // Start server
+        <span class="cov0" title="0">port := os.Getenv("PORT")
+        if port == "" </span><span class="cov0" title="0">{
+                port = "8001"
+        }</span>
+
+        // Setup graceful shutdown
+        <span class="cov0" title="0">go func() </span><span class="cov0" title="0">{
+                log.Printf("🚀 Auth Service started on port %s", port)
+                if err := http.ListenAndServe(":"+port, router); err != nil </span><span class="cov0" title="0">{
+                        log.Fatal(err)
+                }</span>
+        }()
+
+        // Wait for interrupt signal
+        <span class="cov0" title="0">quit := make(chan os.Signal, 1)
+        signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+        &lt;-quit
+        log.Println("Shutting down Auth Service...")</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package middleware
+
+import (
+        "auth-service/utils"
+        "encoding/json"
+        "net/http"
+)
+
+// AuthMiddleware validates JWT token
+func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc <span class="cov8" title="4">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="4">{
+                tokenString := r.Header.Get("Authorization")
+                if tokenString == "" </span><span class="cov1" title="1">{
+                        respondError(w, http.StatusUnauthorized, "No authorization token provided")
+                        return
+                }</span>
+
+                // Remove "Bearer " prefix if present
+                <span class="cov7" title="3">if len(tokenString) &gt; 7 &amp;&amp; tokenString[:7] == "Bearer " </span><span class="cov4" title="2">{
+                        tokenString = tokenString[7:]
+                }</span>
+
+                <span class="cov7" title="3">_, err := utils.ValidateToken(tokenString)
+                if err != nil </span><span class="cov1" title="1">{
+                        respondError(w, http.StatusUnauthorized, "Invalid or expired token")
+                        return
+                }</span>
+
+                <span class="cov4" title="2">next.ServeHTTP(w, r)</span>
+        }
+}
+
+// RequireRole middleware checks if user has required role
+func RequireRole(role string, next http.HandlerFunc) http.HandlerFunc <span class="cov8" title="4">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="4">{
+                tokenString := r.Header.Get("Authorization")
+                if tokenString == "" </span><span class="cov1" title="1">{
+                        respondError(w, http.StatusUnauthorized, "No authorization token provided")
+                        return
+                }</span>
+
+                // Remove "Bearer " prefix if present
+                <span class="cov7" title="3">if len(tokenString) &gt; 7 &amp;&amp; tokenString[:7] == "Bearer " </span><span class="cov7" title="3">{
+                        tokenString = tokenString[7:]
+                }</span>
+
+                <span class="cov7" title="3">claims, err := utils.ValidateToken(tokenString)
+                if err != nil </span><span class="cov1" title="1">{
+                        respondError(w, http.StatusUnauthorized, "Invalid or expired token")
+                        return
+                }</span>
+
+                <span class="cov4" title="2">if claims.Role != role </span><span class="cov1" title="1">{
+                        respondError(w, http.StatusForbidden, "Insufficient permissions")
+                        return
+                }</span>
+
+                <span class="cov1" title="1">next.ServeHTTP(w, r)</span>
+        }
+}
+
+func respondError(w http.ResponseWriter, status int, message string) <span class="cov10" title="5">{
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(status)
+        json.NewEncoder(w).Encode(map[string]interface{}{
+                "success": false,
+                "error":   message,
+        })
+}</span>
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package utils
+
+import (
+        "auth-service/models"
+        "fmt"
+        "os"
+        "time"
+
+        "github.com/golang-jwt/jwt/v5"
+)
+
+var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+
+// GenerateToken generates a JWT token for the user
+func GenerateToken(user *models.User) (string, error) <span class="cov10" title="5">{
+        expiryStr := os.Getenv("JWT_EXPIRY")
+        if expiryStr == "" </span><span class="cov0" title="0">{
+                expiryStr = "24h"
+        }</span>
+
+        <span class="cov10" title="5">duration, err := time.ParseDuration(expiryStr)
+        if err != nil </span><span class="cov1" title="1">{
+                duration = 24 * time.Hour
+        }</span>
+
+        <span class="cov10" title="5">claims := jwt.MapClaims{
+                "user_id": user.ID,
+                "email":   user.Email,
+                "name":    user.Name,
+                "role":    user.Role,
+                "exp":     time.Now().Add(duration).Unix(),
+                "iat":     time.Now().Unix(),
+        }
+
+        token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+        return token.SignedString(jwtSecret)</span>
+}
+
+// ValidateToken validates and parses a JWT token
+func ValidateToken(tokenString string) (*models.TokenClaims, error) <span class="cov10" title="5">{
+        token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) </span><span class="cov8" title="4">{
+                if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+                }</span>
+                <span class="cov8" title="4">return jwtSecret, nil</span>
+        })
+
+        <span class="cov10" title="5">if err != nil </span><span class="cov7" title="3">{
+                return nil, err
+        }</span>
+
+        <span class="cov4" title="2">if claims, ok := token.Claims.(jwt.MapClaims); ok &amp;&amp; token.Valid </span><span class="cov4" title="2">{
+                return &amp;models.TokenClaims{
+                        UserID: claims["user_id"].(string),
+                        Email:  claims["email"].(string),
+                        Name:   claims["name"].(string),
+                        Role:   claims["role"].(string),
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">return nil, fmt.Errorf("invalid token")</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package utils
+
+import (
+        "golang.org/x/crypto/bcrypt"
+)
+
+// HashPassword hashes a plain text password
+func HashPassword(password string) (string, error) <span class="cov10" title="6">{
+        bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+        return string(bytes), err
+}</span>
+
+// CheckPasswordHash compares a password with its hash
+func CheckPasswordHash(password, hash string) bool <span class="cov9" title="5">{
+        err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+        return err == nil
+}</span>
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

@@ -1,0 +1,287 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>api-gateway: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">api-gateway/main.go (0.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">no coverage</span>
+				<span class="cov1">low coverage</span>
+				<span class="cov2">*</span>
+				<span class="cov3">*</span>
+				<span class="cov4">*</span>
+				<span class="cov5">*</span>
+				<span class="cov6">*</span>
+				<span class="cov7">*</span>
+				<span class="cov8">*</span>
+				<span class="cov9">*</span>
+				<span class="cov10">high coverage</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "api-gateway/consul"
+        "io"
+        "log"
+        "net/http"
+        "net/http/httputil"
+        "net/url"
+        "os"
+        "os/signal"
+        "strings"
+        "syscall"
+
+        "github.com/gorilla/mux"
+        "github.com/joho/godotenv"
+        "github.com/rs/cors"
+)
+
+var (
+        authServiceURL     string
+        buildingServiceURL string
+        bookingServiceURL  string
+)
+
+func main() <span class="cov0" title="0">{
+        // Load environment variables
+        if err := godotenv.Load(); err != nil </span><span class="cov0" title="0">{
+                log.Println("No .env file found, using system environment variables")
+        }</span>
+
+        // Initialize Consul
+        <span class="cov0" title="0">if err := consul.InitConsul(); err != nil </span><span class="cov0" title="0">{
+                log.Printf("⚠️  Failed to initialize Consul: %v", err)
+        }</span> else<span class="cov0" title="0"> {
+                // Register service with Consul
+                if err := consul.RegisterService(); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("⚠️  Failed to register service with Consul: %v", err)
+                }</span>
+                // Deregister on shutdown
+                <span class="cov0" title="0">defer consul.DeregisterService()</span>
+        }
+
+        // Load service URLs
+        <span class="cov0" title="0">authServiceURL = getEnv("AUTH_SERVICE_URL", "http://localhost:8001")
+        buildingServiceURL = getEnv("BUILDING_SERVICE_URL", "http://localhost:8002")
+        bookingServiceURL = getEnv("BOOKING_SERVICE_URL", "http://localhost:8003")
+
+        // Create router
+        router := mux.NewRouter()
+
+        // Auth service routes
+        router.PathPrefix("/api/auth").HandlerFunc(createProxyHandler(authServiceURL))
+
+        // Building service routes
+        router.PathPrefix("/api/buildings").HandlerFunc(createProxyHandler(buildingServiceURL))
+
+        // Booking service routes
+        router.PathPrefix("/api/bookings").HandlerFunc(createProxyHandler(bookingServiceURL))
+
+        // Health check
+        router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusOK)
+                w.Write([]byte(`{"status":"healthy","service":"api-gateway","services":{"auth":"` + authServiceURL + `","building":"` + buildingServiceURL + `","booking":"` + bookingServiceURL + `"}}`))
+        }</span>).Methods("GET")
+
+        // API documentation
+        <span class="cov0" title="0">router.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusOK)
+                w.Write([]byte(`{
+                        "message": "Hostel Management System API Gateway",
+                        "version": "1.0.0",
+                        "endpoints": {
+                                "auth": "/api/auth/*",
+                                "buildings": "/api/buildings/*",
+                                "bookings": "/api/bookings/*"
+                        },
+                        "documentation": {
+                                "auth_service": "Authentication and user management",
+                                "building_service": "Building, room, and bed management",
+                                "booking_service": "Booking management and reservations"
+                        }
+                }`))
+        }</span>).Methods("GET")
+
+        // CORS configuration - Only the API Gateway should handle CORS
+        <span class="cov0" title="0">c := cors.New(cors.Options{
+                AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001"},
+                AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+                AllowedHeaders:   []string{"Content-Type", "Authorization"},
+                AllowCredentials: true,
+                MaxAge:           300,
+        })
+
+        handler := c.Handler(router)
+
+        // Start server
+        port := getEnv("PORT", "8000")
+        
+        // Setup graceful shutdown
+        go func() </span><span class="cov0" title="0">{
+                log.Printf("🚀 API Gateway started on port %s", port)
+                log.Printf("   Auth Service: %s", authServiceURL)
+                log.Printf("   Building Service: %s", buildingServiceURL)
+                log.Printf("   Booking Service: %s", bookingServiceURL)
+                if err := http.ListenAndServe(":"+port, handler); err != nil </span><span class="cov0" title="0">{
+                        log.Fatal(err)
+                }</span>
+        }()
+
+        // Wait for interrupt signal
+        <span class="cov0" title="0">quit := make(chan os.Signal, 1)
+        signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+        &lt;-quit
+        log.Println("Shutting down API Gateway...")</span>
+}
+
+// createProxyHandler creates a reverse proxy handler for the given service URL
+func createProxyHandler(serviceURL string) http.HandlerFunc <span class="cov0" title="0">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                // Parse the service URL
+                target, err := url.Parse(serviceURL)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Error parsing service URL: %v", err)
+                        http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+                        return
+                }</span>
+
+                // Create reverse proxy
+                <span class="cov0" title="0">proxy := httputil.NewSingleHostReverseProxy(target)
+
+                // Modify the request
+                r.URL.Host = target.Host
+                r.URL.Scheme = target.Scheme
+                r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
+                r.Host = target.Host
+
+                // Custom error handler
+                proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) </span><span class="cov0" title="0">{
+                        log.Printf("Proxy error for %s: %v", r.URL.Path, err)
+                        
+                        // Check if we can still write to response
+                        w.Header().Set("Content-Type", "application/json")
+                        w.WriteHeader(http.StatusBadGateway)
+                        
+                        serviceName := getServiceName(r.URL.Path)
+                        io.WriteString(w, `{"success": false, "error": "Service `+serviceName+` is currently unavailable"}`)
+                }</span>
+
+                // Serve the request
+                <span class="cov0" title="0">proxy.ServeHTTP(w, r)</span>
+        }
+}
+
+// getServiceName extracts service name from path
+func getServiceName(path string) string <span class="cov0" title="0">{
+        if strings.HasPrefix(path, "/api/auth") </span><span class="cov0" title="0">{
+                return "auth"
+        }</span> else<span class="cov0" title="0"> if strings.HasPrefix(path, "/api/buildings") </span><span class="cov0" title="0">{
+                return "building"
+        }</span> else<span class="cov0" title="0"> if strings.HasPrefix(path, "/api/bookings") </span><span class="cov0" title="0">{
+                return "booking"
+        }</span>
+        <span class="cov0" title="0">return "unknown"</span>
+}
+
+// getEnv gets environment variable with fallback
+func getEnv(key, fallback string) string <span class="cov0" title="0">{
+        if value := os.Getenv(key); value != "" </span><span class="cov0" title="0">{
+                return value
+        }</span>
+        <span class="cov0" title="0">return fallback</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

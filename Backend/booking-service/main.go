@@ -39,31 +39,11 @@ func main() {
 	}
 
 	// Create router
-	router := mux.NewRouter()
-
-	// API routes
-	api := router.PathPrefix("/api/bookings").Subrouter()
-
-	// Booking routes
-	api.HandleFunc("", handlers.GetAllBookings).Methods("GET", "OPTIONS")
-	api.HandleFunc("", handlers.CreateBooking).Methods("POST", "OPTIONS")
-	api.HandleFunc("/{id}", handlers.GetBookingByID).Methods("GET", "OPTIONS")
-	api.HandleFunc("/{id}/cancel", handlers.CancelBooking).Methods("PUT", "OPTIONS")
-	api.HandleFunc("/users/{userId}", handlers.GetBookingsByUserID).Methods("GET", "OPTIONS")
-
-	// Health check
-	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"healthy","service":"booking-service"}`))
-	}).Methods("GET")
+	router := setupRouter()
 
 	// No CORS configuration - API Gateway handles all CORS
 	// Start server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8003"
-	}
+	port := getPort("8003")
 
 	// Setup graceful shutdown
 	go func() {
@@ -78,4 +58,40 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutting down Booking Service...")
+}
+
+// setupRouter configures and returns the HTTP router with all routes
+func setupRouter() *mux.Router {
+	router := mux.NewRouter()
+
+	// API routes
+	api := router.PathPrefix("/api/bookings").Subrouter()
+
+	// Booking routes
+	api.HandleFunc("", handlers.GetAllBookings).Methods("GET", "OPTIONS")
+	api.HandleFunc("", handlers.CreateBooking).Methods("POST", "OPTIONS")
+	api.HandleFunc("/{id}", handlers.GetBookingByID).Methods("GET", "OPTIONS")
+	api.HandleFunc("/{id}/cancel", handlers.CancelBooking).Methods("PUT", "OPTIONS")
+	api.HandleFunc("/users/{userId}", handlers.GetBookingsByUserID).Methods("GET", "OPTIONS")
+
+	// Health check
+	router.HandleFunc("/health", healthCheckHandler).Methods("GET")
+
+	return router
+}
+
+// healthCheckHandler handles health check requests
+func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"healthy","service":"booking-service"}`))
+}
+
+// getPort returns the port from environment or default
+func getPort(defaultPort string) string {
+	port := os.Getenv("PORT")
+	if port == "" {
+		return defaultPort
+	}
+	return port
 }

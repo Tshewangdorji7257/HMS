@@ -1,0 +1,509 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>booking-service: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">booking-service/main.go (0.0%)</option>
+				
+				<option value="file1">booking-service/utils/config.go (0.0%)</option>
+				
+				<option value="file2">booking-service/utils/email.go (6.5%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">no coverage</span>
+				<span class="cov1">low coverage</span>
+				<span class="cov2">*</span>
+				<span class="cov3">*</span>
+				<span class="cov4">*</span>
+				<span class="cov5">*</span>
+				<span class="cov6">*</span>
+				<span class="cov7">*</span>
+				<span class="cov8">*</span>
+				<span class="cov9">*</span>
+				<span class="cov10">high coverage</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "booking-service/consul"
+        "booking-service/database"
+        "booking-service/handlers"
+        "log"
+        "net/http"
+        "os"
+        "os/signal"
+        "syscall"
+
+        "github.com/gorilla/mux"
+        "github.com/joho/godotenv"
+)
+
+func main() <span class="cov0" title="0">{
+        // Load environment variables
+        if err := godotenv.Load(); err != nil </span><span class="cov0" title="0">{
+                log.Println("No .env file found, using system environment variables")
+        }</span>
+
+        // Initialize database
+        <span class="cov0" title="0">if err := database.InitDB(); err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Failed to initialize database: %v", err)
+        }</span>
+        <span class="cov0" title="0">defer database.CloseDB()
+
+        // Initialize Consul
+        if err := consul.InitConsul(); err != nil </span><span class="cov0" title="0">{
+                log.Printf("⚠️  Failed to initialize Consul: %v", err)
+        }</span> else<span class="cov0" title="0"> {
+                // Register service with Consul
+                if err := consul.RegisterService(); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("⚠️  Failed to register service with Consul: %v", err)
+                }</span>
+                // Deregister on shutdown
+                <span class="cov0" title="0">defer consul.DeregisterService()</span>
+        }
+
+        // Create router
+        <span class="cov0" title="0">router := mux.NewRouter()
+
+        // API routes
+        api := router.PathPrefix("/api/bookings").Subrouter()
+
+        // Booking routes
+        api.HandleFunc("", handlers.GetAllBookings).Methods("GET", "OPTIONS")
+        api.HandleFunc("", handlers.CreateBooking).Methods("POST", "OPTIONS")
+        api.HandleFunc("/{id}", handlers.GetBookingByID).Methods("GET", "OPTIONS")
+        api.HandleFunc("/{id}/cancel", handlers.CancelBooking).Methods("PUT", "OPTIONS")
+        api.HandleFunc("/users/{userId}", handlers.GetBookingsByUserID).Methods("GET", "OPTIONS")
+
+        // Health check
+        router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusOK)
+                w.Write([]byte(`{"status":"healthy","service":"booking-service"}`))
+        }</span>).Methods("GET")
+
+        // No CORS configuration - API Gateway handles all CORS
+        // Start server
+        <span class="cov0" title="0">port := os.Getenv("PORT")
+        if port == "" </span><span class="cov0" title="0">{
+                port = "8003"
+        }</span>
+
+        // Setup graceful shutdown
+        <span class="cov0" title="0">go func() </span><span class="cov0" title="0">{
+                log.Printf("🚀 Booking Service started on port %s", port)
+                if err := http.ListenAndServe(":"+port, router); err != nil </span><span class="cov0" title="0">{
+                        log.Fatal(err)
+                }</span>
+        }()
+
+        // Wait for interrupt signal
+        <span class="cov0" title="0">quit := make(chan os.Signal, 1)
+        signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+        &lt;-quit
+        log.Println("Shutting down Booking Service...")</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package utils
+
+import "os"
+
+// GetAuthServiceURL returns the auth service URL
+func GetAuthServiceURL() string <span class="cov0" title="0">{
+        url := os.Getenv("AUTH_SERVICE_URL")
+        if url == "" </span><span class="cov0" title="0">{
+                return "http://localhost:8001"
+        }</span>
+        <span class="cov0" title="0">return url</span>
+}
+
+// GetBuildingServiceURL returns the building service URL
+func GetBuildingServiceURL() string <span class="cov0" title="0">{
+        url := os.Getenv("BUILDING_SERVICE_URL")
+        if url == "" </span><span class="cov0" title="0">{
+                return "http://localhost:8002"
+        }</span>
+        <span class="cov0" title="0">return url</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package utils
+
+import (
+        "bytes"
+        "fmt"
+        "html/template"
+        "log"
+        "net/smtp"
+        "os"
+)
+
+// EmailConfig holds email configuration
+type EmailConfig struct {
+        SMTPHost     string
+        SMTPPort     string
+        SMTPUser     string
+        SMTPPassword string
+        FromEmail    string
+        FromName     string
+}
+
+// GetEmailConfig returns email configuration from environment variables
+func GetEmailConfig() *EmailConfig <span class="cov0" title="0">{
+        return &amp;EmailConfig{
+                SMTPHost:     getEnv("SMTP_HOST", "smtp.gmail.com"),
+                SMTPPort:     getEnv("SMTP_PORT", "587"),
+                SMTPUser:     getEnv("SMTP_USER", ""),
+                SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+                FromEmail:    getEnv("FROM_EMAIL", "noreply@hostelmgmt.com"),
+                FromName:     getEnv("FROM_NAME", "Hostel Management System"),
+        }
+}</span>
+
+// BookingConfirmationData holds data for booking confirmation email
+type BookingConfirmationData struct {
+        StudentName  string
+        BuildingName string
+        RoomNumber   string
+        BedNumber    int
+        BookingDate  string
+        BookingID    string
+}
+
+// BookingCancellationData holds data for booking cancellation email
+type BookingCancellationData struct {
+        StudentName  string
+        BuildingName string
+        RoomNumber   string
+        BedNumber    int
+        CancelDate   string
+        BookingID    string
+}
+
+// SendBookingConfirmationEmail sends a booking confirmation email
+func SendBookingConfirmationEmail(toEmail string, data BookingConfirmationData) error <span class="cov0" title="0">{
+        config := GetEmailConfig()
+
+        // Skip if email credentials are not configured
+        if config.SMTPUser == "" || config.SMTPPassword == "" </span><span class="cov0" title="0">{
+                log.Println("⚠️  Email notifications disabled: SMTP credentials not configured")
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">subject := "🎉 Booking Confirmed - Your Hostel Room is Reserved!"
+        body := generateBookingConfirmationHTML(data)
+
+        return sendEmail(config, toEmail, subject, body)</span>
+}
+
+// SendBookingCancellationEmail sends a booking cancellation email
+func SendBookingCancellationEmail(toEmail string, data BookingCancellationData) error <span class="cov0" title="0">{
+        config := GetEmailConfig()
+
+        // Skip if email credentials are not configured
+        if config.SMTPUser == "" || config.SMTPPassword == "" </span><span class="cov0" title="0">{
+                log.Println("⚠️  Email notifications disabled: SMTP credentials not configured")
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">subject := "❌ Booking Cancelled - Your Reservation has been Cancelled"
+        body := generateBookingCancellationHTML(data)
+
+        return sendEmail(config, toEmail, subject, body)</span>
+}
+
+// sendEmail sends an email using SMTP
+func sendEmail(config *EmailConfig, to, subject, body string) error <span class="cov0" title="0">{
+        // Email headers
+        headers := make(map[string]string)
+        headers["From"] = fmt.Sprintf("%s &lt;%s&gt;", config.FromName, config.FromEmail)
+        headers["To"] = to
+        headers["Subject"] = subject
+        headers["MIME-Version"] = "1.0"
+        headers["Content-Type"] = "text/html; charset=UTF-8"
+
+        // Build email message
+        message := ""
+        for k, v := range headers </span><span class="cov0" title="0">{
+                message += fmt.Sprintf("%s: %s\r\n", k, v)
+        }</span>
+        <span class="cov0" title="0">message += "\r\n" + body
+
+        // SMTP authentication
+        auth := smtp.PlainAuth("", config.SMTPUser, config.SMTPPassword, config.SMTPHost)
+
+        // Send email
+        addr := fmt.Sprintf("%s:%s", config.SMTPHost, config.SMTPPort)
+        err := smtp.SendMail(addr, auth, config.FromEmail, []string{to}, []byte(message))
+        
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("❌ Failed to send email to %s: %v", to, err)
+                return err
+        }</span>
+
+        <span class="cov0" title="0">log.Printf("✅ Email sent successfully to %s", to)
+        return nil</span>
+}
+
+// generateBookingConfirmationHTML generates HTML for booking confirmation email
+func generateBookingConfirmationHTML(data BookingConfirmationData) string <span class="cov0" title="0">{
+        tmpl := `
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;meta charset="UTF-8"&gt;
+    &lt;style&gt;
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .booking-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .detail-label { font-weight: bold; color: #667eea; }
+        .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div class="container"&gt;
+        &lt;div class="header"&gt;
+            &lt;h1&gt;🎉 Booking Confirmed!&lt;/h1&gt;
+            &lt;p&gt;Your hostel room has been successfully reserved&lt;/p&gt;
+        &lt;/div&gt;
+        &lt;div class="content"&gt;
+            &lt;p&gt;Dear {{.StudentName}},&lt;/p&gt;
+            &lt;p&gt;Congratulations! Your booking has been confirmed. Here are your reservation details:&lt;/p&gt;
+            
+            &lt;div class="booking-details"&gt;
+                &lt;h3 style="color: #667eea; margin-top: 0;"&gt;Booking Details&lt;/h3&gt;
+                &lt;div class="detail-row"&gt;
+                    &lt;span class="detail-label"&gt;Booking ID:&lt;/span&gt;
+                    &lt;span&gt;{{.BookingID}}&lt;/span&gt;
+                &lt;/div&gt;
+                &lt;div class="detail-row"&gt;
+                    &lt;span class="detail-label"&gt;Building:&lt;/span&gt;
+                    &lt;span&gt;{{.BuildingName}}&lt;/span&gt;
+                &lt;/div&gt;
+                &lt;div class="detail-row"&gt;
+                    &lt;span class="detail-label"&gt;Room Number:&lt;/span&gt;
+                    &lt;span&gt;{{.RoomNumber}}&lt;/span&gt;
+                &lt;/div&gt;
+                &lt;div class="detail-row"&gt;
+                    &lt;span class="detail-label"&gt;Bed Number:&lt;/span&gt;
+                    &lt;span&gt;{{.BedNumber}}&lt;/span&gt;
+                &lt;/div&gt;
+                &lt;div class="detail-row"&gt;
+                    &lt;span class="detail-label"&gt;Booking Date:&lt;/span&gt;
+                    &lt;span&gt;{{.BookingDate}}&lt;/span&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+
+            &lt;h3&gt;📋 Next Steps:&lt;/h3&gt;
+            &lt;ul&gt;
+                &lt;li&gt;Report to the hostel office within 7 days with your ID proof&lt;/li&gt;
+                &lt;li&gt;Complete the payment and documentation process&lt;/li&gt;
+                &lt;li&gt;Collect your room keys and access card&lt;/li&gt;
+                &lt;li&gt;Review the hostel rules and regulations&lt;/li&gt;
+            &lt;/ul&gt;
+
+            &lt;p&gt;&lt;strong&gt;Important:&lt;/strong&gt; Please keep this email for your records. You will need your Booking ID when visiting the hostel office.&lt;/p&gt;
+            
+            &lt;div style="text-align: center; margin-top: 30px;"&gt;
+                &lt;p style="color: #666;"&gt;If you have any questions, please contact the hostel administration.&lt;/p&gt;
+            &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div class="footer"&gt;
+            &lt;p&gt;This is an automated email from Hostel Management System&lt;/p&gt;
+            &lt;p&gt;Please do not reply to this email&lt;/p&gt;
+        &lt;/div&gt;
+    &lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+`
+
+        t := template.Must(template.New("booking-confirmation").Parse(tmpl))
+        var body bytes.Buffer
+        t.Execute(&amp;body, data)
+        return body.String()
+}</span>
+
+// generateBookingCancellationHTML generates HTML for booking cancellation email
+func generateBookingCancellationHTML(data BookingCancellationData) string <span class="cov0" title="0">{
+        tmpl := `
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;meta charset="UTF-8"&gt;
+    &lt;style&gt;
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .booking-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .detail-label { font-weight: bold; color: #f5576c; }
+        .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div class="container"&gt;
+        &lt;div class="header"&gt;
+            &lt;h1&gt;❌ Booking Cancelled&lt;/h1&gt;
+            &lt;p&gt;Your reservation has been cancelled&lt;/p&gt;
+        &lt;/div&gt;
+        &lt;div class="content"&gt;
+            &lt;p&gt;Dear {{.StudentName}},&lt;/p&gt;
+            &lt;p&gt;This email confirms that your hostel booking has been cancelled.&lt;/p&gt;
+            
+            &lt;div class="booking-details"&gt;
+                &lt;h3 style="color: #f5576c; margin-top: 0;"&gt;Cancelled Booking Details&lt;/h3&gt;
+                &lt;div class="detail-row"&gt;
+                    &lt;span class="detail-label"&gt;Booking ID:&lt;/span&gt;
+                    &lt;span&gt;{{.BookingID}}&lt;/span&gt;
+                &lt;/div&gt;
+                &lt;div class="detail-row"&gt;
+                    &lt;span class="detail-label"&gt;Building:&lt;/span&gt;
+                    &lt;span&gt;{{.BuildingName}}&lt;/span&gt;
+                &lt;/div&gt;
+                &lt;div class="detail-row"&gt;
+                    &lt;span class="detail-label"&gt;Room Number:&lt;/span&gt;
+                    &lt;span&gt;{{.RoomNumber}}&lt;/span&gt;
+                &lt;/div&gt;
+                &lt;div class="detail-row"&gt;
+                    &lt;span class="detail-label"&gt;Bed Number:&lt;/span&gt;
+                    &lt;span&gt;{{.BedNumber}}&lt;/span&gt;
+                &lt;/div&gt;
+                &lt;div class="detail-row"&gt;
+                    &lt;span class="detail-label"&gt;Cancellation Date:&lt;/span&gt;
+                    &lt;span&gt;{{.CancelDate}}&lt;/span&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+
+            &lt;p&gt;The bed is now available for other students to book.&lt;/p&gt;
+
+            &lt;h3&gt;📋 What's Next:&lt;/h3&gt;
+            &lt;ul&gt;
+                &lt;li&gt;You can browse and book other available rooms&lt;/li&gt;
+                &lt;li&gt;Visit our hostel management system to explore options&lt;/li&gt;
+                &lt;li&gt;If you have any refund queries, contact the hostel office&lt;/li&gt;
+            &lt;/ul&gt;
+            
+            &lt;div style="text-align: center; margin-top: 30px;"&gt;
+                &lt;p style="color: #666;"&gt;If you have any questions or concerns, please contact the hostel administration.&lt;/p&gt;
+            &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div class="footer"&gt;
+            &lt;p&gt;This is an automated email from Hostel Management System&lt;/p&gt;
+            &lt;p&gt;Please do not reply to this email&lt;/p&gt;
+        &lt;/div&gt;
+    &lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+`
+
+        t := template.Must(template.New("booking-cancellation").Parse(tmpl))
+        var body bytes.Buffer
+        t.Execute(&amp;body, data)
+        return body.String()
+}</span>
+
+func getEnv(key, fallback string) string <span class="cov10" title="3">{
+        if value := os.Getenv(key); value != "" </span><span class="cov1" title="1">{
+                return value
+        }</span>
+        <span class="cov6" title="2">return fallback</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
